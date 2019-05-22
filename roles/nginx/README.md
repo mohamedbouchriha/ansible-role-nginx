@@ -1,236 +1,728 @@
-# Ansible Role: Nginx
+Ansible NGINX Role
+==================
 
-[![Build Status](https://travis-ci.org/geerlingguy/ansible-role-nginx.svg?branch=master)](https://travis-ci.org/geerlingguy/ansible-role-nginx)
+[![Ansible Galaxy](https://img.shields.io/badge/galaxy-nginxinc.nginx-5bbdbf.svg)](https://galaxy.ansible.com/nginxinc/nginx)
+[![Build Status](https://travis-ci.org/nginxinc/ansible-role-nginx.svg?branch=master)](https://travis-ci.org/nginxinc/ansible-role-nginx)
 
-**Note:** Please consider using the official [NGINX Ansible role](https://github.com/nginxinc/ansible-role-nginx) from NGINX, Inc.
+This role installs NGINX Open Source, NGINX Plus, the NGINX Amplify agent, the NGINX Controller agent, or NGINX Unit on your target host.
 
-Installs Nginx on RedHat/CentOS, Debian/Ubuntu, Archlinux, FreeBSD or OpenBSD servers.
+**Note:** This role is still in active development. There may be unidentified issues and the role variables may change as development continues.
 
-This role installs and configures the latest version of Nginx from the Nginx yum repository (on RedHat-based systems), apt (on Debian-based systems), pacman (Archlinux), pkgng (on FreeBSD systems) or pkg_add (on OpenBSD systems). You will likely need to do extra setup work after this role has installed Nginx, like adding your own [virtualhost].conf file inside `/etc/nginx/conf.d/`, describing the location and options to use for your particular website.
+Requirements
+------------
 
-## Requirements
+This role was developed using Ansible 2.4.0.0. Backwards compatibility is not guaranteed.
 
-None.
+Use `ansible-galaxy install nginxinc.nginx` to install the role on your system.
 
-## Role Variables
+It supports all platforms supported by [NGINX Open Source](https://nginx.org/en/linux_packages.html#mainline) and [NGINX Plus](https://www.nginx.com/products/technical-specs/):
 
-Available variables are listed below, along with default values (see `defaults/main.yml`):
-
-    nginx_vhosts: []
-
-A list of vhost definitions (server blocks) for Nginx virtual hosts. Each entry will create a separate config file named by `server_name`. If left empty, you will need to supply your own virtual host configuration. See the commented example in `defaults/main.yml` for available server options. If you have a large number of customizations required for your server definition(s), you're likely better off managing the vhost configuration file yourself, leaving this variable set to `[]`.
-
-    nginx_vhosts:
-      - listen: "443 ssl http2"
-        server_name: "example.com"
-        server_name_redirect: "www.example.com"
-        root: "/var/www/example.com"
-        index: "index.php index.html index.htm"
-        error_page: ""
-        access_log: ""
-        error_log: ""
-        state: "present"
-        template: "{{ nginx_vhost_template }}"
-        filename: "example.com.conf"
-        extra_parameters: |
-          location ~ \.php$ {
-              fastcgi_split_path_info ^(.+\.php)(/.+)$;
-              fastcgi_pass unix:/var/run/php5-fpm.sock;
-              fastcgi_index index.php;
-              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-              include fastcgi_params;
-          }
-          ssl_certificate     /etc/ssl/certs/ssl-cert-snakeoil.pem;
-          ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
-          ssl_protocols       TLSv1.1 TLSv1.2;
-          ssl_ciphers         HIGH:!aNULL:!MD5;
-
-An example of a fully-populated nginx_vhosts entry, using a `|` to declare a block of syntax for the `extra_parameters`.
-
-Please take note of the indentation in the above block. The first line should be a normal 2-space indent. All other lines should be indented normally relative to that line. In the generated file, the entire block will be 4-space indented. This style will ensure the config file is indented correctly.
-
-      - listen: "80"
-        server_name: "example.com www.example.com"
-        return: "301 https://example.com$request_uri"
-        filename: "example.com.80.conf"
-
-An example of a secondary vhost which will redirect to the one shown above.
-
-*Note: The `filename` defaults to the first domain in `server_name`, if you have two vhosts with the same domain, eg. a redirect, you need to manually set the `filename` so the second one doesn't override the first one*
-
-    nginx_remove_default_vhost: false
-
-Whether to remove the 'default' virtualhost configuration supplied by Nginx. Useful if you want the base `/` URL to be directed at one of your own virtual hosts configured in a separate .conf file.
-
-    nginx_upstreams: []
-
-If you are configuring Nginx as a load balancer, you can define one or more upstream sets using this variable. In addition to defining at least one upstream, you would need to configure one of your server blocks to proxy requests through the defined upstream (e.g. `proxy_pass http://myapp1;`). See the commented example in `defaults/main.yml` for more information.
-
-    nginx_user: "nginx"
-
-The user under which Nginx will run. Defaults to `nginx` for RedHat, `www-data` for Debian and `www` on FreeBSD and OpenBSD.
-
-    nginx_worker_processes: "{{ ansible_processor_vcpus|default(ansible_processor_count) }}"
-    nginx_worker_connections: "1024"
-    nginx_multi_accept: "off"
-
-`nginx_worker_processes` should be set to the number of cores present on your machine (if the default is incorrect, find this number with `grep processor /proc/cpuinfo | wc -l`). `nginx_worker_connections` is the number of connections per process. Set this higher to handle more simultaneous connections (and remember that a connection will be used for as long as the keepalive timeout duration for every client!). You can set `nginx_multi_accept` to `on` if you want Nginx to accept all connections immediately.
-
-    nginx_error_log: "/var/log/nginx/error.log warn"
-    nginx_access_log: "/var/log/nginx/access.log main buffer=16k"
-
-Configuration of the default error and access logs. Set to `off` to disable a log entirely.
-
-    nginx_sendfile: "on"
-    nginx_tcp_nopush: "on"
-    nginx_tcp_nodelay: "on"
-
-TCP connection options. See [this blog post](https://t37.net/nginx-optimization-understanding-sendfile-tcp_nodelay-and-tcp_nopush.html) for more information on these directives.
-
-    nginx_keepalive_timeout: "65"
-    nginx_keepalive_requests: "100"
-
-Nginx keepalive settings. Timeout should be set higher (10s+) if you have more polling-style traffic (AJAX-powered sites especially), or lower (<10s) if you have a site where most users visit a few pages and don't send any further requests.
-
-    nginx_server_tokens: "on"
-
-Nginx server_tokens settings. Controls whether nginx responds with it's version in HTTP headers. Set to `"off"` to disable.
-
-    nginx_client_max_body_size: "64m"
-
-This value determines the largest file upload possible, as uploads are passed through Nginx before hitting a backend like `php-fpm`. If you get an error like `client intended to send too large body`, it means this value is set too low.
-
-    nginx_server_names_hash_bucket_size: "64"
-
-If you have many server names, or have very long server names, you might get an Nginx error on startup requiring this value to be increased.
-
-    nginx_proxy_cache_path: ""
-
-Set as the `proxy_cache_path` directive in the `nginx.conf` file. By default, this will not be configured (if left as an empty string), but if you wish to use Nginx as a reverse proxy, you can set this to a valid value (e.g. `"/var/cache/nginx keys_zone=cache:32m"`) to use Nginx's cache (further proxy configuration can be done in individual server configurations).
-
-    nginx_extra_http_options: ""
-
-Extra lines to be inserted in the top-level `http` block in `nginx.conf`. The value should be defined literally (as you would insert it directly in the `nginx.conf`, adhering to the Nginx configuration syntax - such as `;` for line termination, etc.), for example:
-
-    nginx_extra_http_options: |
-      proxy_buffering    off;
-      proxy_set_header   X-Real-IP $remote_addr;
-      proxy_set_header   X-Scheme $scheme;
-      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header   Host $http_host;
-
-See the template in `templates/nginx.conf.j2` for more details on the placement.
-
-    nginx_extra_conf_options: ""
-
-Extra lines to be inserted in the top of `nginx.conf`. The value should be defined literally (as you would insert it directly in the `nginx.conf`, adhering to the Nginx configuration syntax - such as `;` for line termination, etc.), for example:
-
-    nginx_extra_conf_options: |
-      worker_rlimit_nofile 8192;
-
-See the template in `templates/nginx.conf.j2` for more details on the placement.
-
-    nginx_log_format: |-
-      '$remote_addr - $remote_user [$time_local] "$request" '
-      '$status $body_bytes_sent "$http_referer" '
-      '"$http_user_agent" "$http_x_forwarded_for"'
-
-Configures Nginx's [`log_format`](http://nginx.org/en/docs/http/ngx_http_log_module.html#log_format). options.
-
-    nginx_default_release: ""
-
-(For Debian/Ubuntu only) Allows you to set a different repository for the installation of Nginx. As an example, if you are running Debian's wheezy release, and want to get a newer version of Nginx, you can install the `wheezy-backports` repository and set that value here, and Ansible will use that as the `-t` option while installing Nginx.
-
-    nginx_ppa_use: false
-    nginx_ppa_version: stable
-
-(For Ubuntu only) Allows you to use the official Nginx PPA instead of the system's package. You can set the version to `stable` or `development`.
-
-    nginx_yum_repo_enabled: true
-
-(For RedHat/CentOS only) Set this to `false` to disable the installation of the `nginx` yum repository. This could be necessary if you want the default OS stable packages, or if you use Satellite.
-
-## Overriding configuration templates
-
-If you can't customize via variables because an option isn't exposed, you can override the template used to generate the virtualhost configuration files or the `nginx.conf` file.
+**NGINX Open Source**
 
 ```yaml
-nginx_conf_template: "nginx.conf.j2"
-nginx_vhost_template: "vhost.j2"
+Alpine:
+  versions:
+    - 3.8
+    - 3.9
+CentOS:
+  versions:
+    - 6
+    - 7.4+
+RedHat:
+  versions:
+    - 6
+    - 7.4+
+    - 8
+Debian:
+  versions:
+    - jessie
+    - stretch
+Ubuntu:
+  versions:
+    - trusty
+    - xenial
+    - bionic
+SUSE/SLES:
+  versions:
+    - 12
+    - 15
+FreeBSD:
+  versions:
+    - 11.2+
+    - 12
 ```
 
-If necessary you can also set the template on a per vhost basis.
+**NGINX Plus**
 
 ```yaml
-nginx_vhosts:
-  - listen: "80 default_server"
-    server_name: "site1.example.com"
-    root: "/var/www/site1.example.com"
-    index: "index.php index.html index.htm"
-    template: "{{ playbook_dir }}/templates/site1.example.com.vhost.j2"
-  - server_name: "site2.example.com"
-    root: "/var/www/site2.example.com"
-    index: "index.php index.html index.htm"
-    template: "{{ playbook_dir }}/templates/site2.example.com.vhost.j2"
+Alpine:
+  versions:
+    - 3.8
+    - 3.9
+Amazon Linux:
+  versions:
+    - 2018.03
+Amazon Linux 2:
+  versions:
+    - LTS
+CentOS:
+  versions:
+    - 6.5+
+    - 7.4+
+Debian:
+  versions:
+    - jessie
+    - stretch
+FreeBSD:
+  versions:
+    - 11.2+
+    - 12
+Oracle Linux:
+  versions:
+    - 6.5+
+    - 7.4+
+RedHat:
+  versions:
+    - 6.5+
+    - 7.4+
+    - 8
+SUSE/SLES:
+  versions:
+    - 12
+    - 15
+Ubuntu:
+  versions:
+    - trusty
+    - xenial
+    - bionic
 ```
 
-You can either copy and modify the provided template, or extend it with [Jinja2 template inheritance](http://jinja.pocoo.org/docs/2.9/templates/#template-inheritance) and override the specific template block you need to change.
-
-### Example: Configure gzip in nginx configuration
-
-Set the `nginx_conf_template` to point to a template file in your playbook directory.
+**NGINX Amplify**
 
 ```yaml
-nginx_conf_template: "{{ playbook_dir }}/templates/nginx.conf.j2"
+Amazon Linux:
+  versions:
+    - 2017.09
+CentOS:
+  versions:
+    - 6
+    - 7
+Debian:
+  versions:
+    - jessie
+    - stretch
+Ubuntu:
+  versions:
+    - trusty
+    - xenial
+    - bionic
+RedHat:
+  versions:
+    - 6
+    - 7
 ```
 
-Create the child template in the path you configured above and extend `geerlingguy.nginx` template file relative to your `playbook.yml`.
+**NGINX Controller**
 
-```
-{% extends 'roles/geerlingguy.nginx/templates/nginx.conf.j2' %}
-
-{% block http_gzip %}
-    gzip on;
-    gzip_proxied any;
-    gzip_static on;
-    gzip_http_version 1.0;
-    gzip_disable "MSIE [1-6]\.";
-    gzip_vary on;
-    gzip_comp_level 6;
-    gzip_types
-        text/plain
-        text/css
-        text/xml
-        text/javascript
-        application/javascript
-        application/x-javascript
-        application/json
-        application/xml
-        application/xml+rss
-        application/xhtml+xml
-        application/x-font-ttf
-        application/x-font-opentype
-        image/svg+xml
-        image/x-icon;
-    gzip_buffers 16 8k;
-    gzip_min_length 512;
-{% endblock %}
+```yaml
+Amazon Linux:
+  versions:
+    - 2017.09
+Amazon Linux 2:
+  versions:
+    - LTS
+CentOS:
+  versions:
+    - 6
+    - 7
+Debian:
+  versions:
+    - jessie
+    - stretch
+Ubuntu:
+  versions:
+    - xenial
+    - bionic
+RedHat:
+  versions:
+    - 6
+    - 7
 ```
 
-## Dependencies
+**NGINX Unit**
 
-None.
+```yaml
+CentOS:
+  versions:
+    - 6
+    - 7
+RedHat:
+  versions:
+    - 6
+    - 7
+Debian:
+  versions:
+    - jessie
+    - stretch
+Ubuntu:
+  versions:
+    - xenial
+    - bionic
+Amazon Linux:
+  versions:
+    - 2018.03
+Amazon Linux 2:
+  versions:
+    - 2
+FreeBSD:
+  versions:
+    - 10
+    - 11
+```
 
-## Example Playbook
+Role Variables
+--------------
 
-    - hosts: server
-      roles:
-        - { role: geerlingguy.nginx }
+This role has multiple variables. The defaults for all these variables are the following:
 
-## License
+```yaml
+---
+# Install NGINX.
+# Default is true.
+nginx_enable: true
 
-MIT / BSD
+# Start NGINX service.
+# Default is true.
+nginx_start: true
 
-## Author Information
+# Print NGINX configuration file to terminal after executing playbook.
+nginx_debug_output: false
 
-This role was created in 2014 by [Jeff Geerling](https://www.jeffgeerling.com/), author of [Ansible for DevOps](https://www.ansiblefordevops.com/).
+# Specify which version of NGINX you want to install.
+# Options are 'opensource' or 'plus'.
+# Default is 'opensource'.
+nginx_type: opensource
+
+# Specify repository origin for NGINX Open Source.
+# Options are 'nginx_repository' or 'os_repository'.
+# Only works if 'nginx_type' is set to 'opensource'.
+# Default is nginx_repository.
+nginx_install_from: nginx_repository
+
+# Choose where to fetch the NGINX signing key from.
+# Default is the official NGINX signing key host.
+# nginx_signing_key: http://nginx.org/keys/nginx_signing.key
+
+# Specify source repository for NGINX Open Source.
+# Only works if 'install_from' is set to 'nginx_repository'.
+# Defaults are the official NGINX repositories.
+nginx_repository:
+  alpine: >-
+      https://nginx.org/packages/{{ (nginx_branch == 'mainline')
+      | ternary('mainline/', '') }}alpine/v{{ ansible_distribution_version | regex_search('^[0-9]+\\.[0-9]+') }}/main
+  debian:
+    - >-
+      deb https://nginx.org/packages/{{ (nginx_branch == 'mainline')
+      | ternary('mainline/', '') }}{{ ansible_distribution | lower }}/ {{ ansible_distribution_release }} nginx
+    - >-
+      deb-src https://nginx.org/packages/{{ (nginx_branch == 'mainline')
+      | ternary('mainline/', '') }}{{ ansible_distribution | lower }}/ {{ ansible_distribution_release }} nginx
+  redhat: >-
+      https://nginx.org/packages/{{ (nginx_branch == 'mainline')
+      | ternary('mainline/', '') }}{{ (ansible_distribution == "RedHat")
+      | ternary('rhel', 'centos') }}/{{ ansible_distribution_major_version }}/$basearch/
+  suse: >-
+      https://nginx.org/packages/{{ (nginx_branch == 'mainline')
+      | ternary('mainline/', '') }}sles/{{ ansible_distribution_major_version }}
+
+# Specify which branch of NGINX Open Source you want to install.
+# Options are 'mainline' or 'stable'.
+# Only works if 'install_from' is set to 'nginx_repository'.
+# Default is mainline.
+nginx_branch: mainline
+
+# Location of your NGINX Plus license in your local machine.
+# Default is the files folder within the NGINX Ansible role.
+nginx_license:
+  certificate: license/nginx-repo.crt
+  key: license/nginx-repo.key
+
+# Delete NGINX Plus license after installation for security purposes.
+# Default is true.
+nginx_delete_license: true
+
+# Install NGINX JavaScript, Perl, ModSecurity WAF (NGINX Plus only), GeoIP, Image-Filter, RTMP Media Streaming, and/or XSLT modules.
+# Default is false.
+nginx_modules:
+  njs: false
+  perl: false
+  waf: false
+  geoip: false
+  image_filter: false
+  rtmp: false
+  xslt: false
+
+# Install NGINX Amplify.
+# Use your NGINX Amplify API key.
+# Requires access to either the NGINX stub status or the NGINX Plus REST API.
+# Default is null.
+nginx_amplify_enable: false
+nginx_amplify_api_key: null
+
+# Install NGINX Controller.
+# Use your NGINX Controller API key and NGINX Controller API endpoint.
+# Requires NGINX Plus and write access to the NGINX Plus REST API.
+# Default is null.
+nginx_controller_enable: false
+nginx_controller_api_key: null
+nginx_controller_api_endpoint: null
+
+# Install NGINX Unit and NGINX Unit modules.
+# Use a list of supported NGINX Unit modules.
+# Default is false.
+nginx_unit_enable: false
+nginx_unit_modules: null
+
+# Remove previously existing NGINX configuration files.
+# Use a list of paths you wish to remove.
+# Default is false.
+nginx_cleanup_config: false
+nginx_cleanup_config_path:
+  - /etc/nginx/conf.d
+
+# Enable uploading NGINX configuration files to your system.
+# Default for uploading files is false.
+# Default location of files is the files folder within the NGINX Ansible role.
+# Upload the main NGINX configuration file.
+nginx_main_upload_enable: false
+nginx_main_upload_src: conf/nginx.conf
+nginx_main_upload_dest: /etc/nginx/
+# Upload HTTP NGINX configuration files.
+nginx_http_upload_enable: false
+nginx_http_upload_src: conf/http/*.conf
+nginx_http_upload_dest: /etc/nginx/conf.d/
+# Upload Stream NGINX configuration files.
+nginx_stream_upload_enable: false
+nginx_stream_upload_src: conf/stream/*.conf
+nginx_stream_upload_dest: /etc/nginx/conf.d/
+# Upload HTML files.
+nginx_html_upload_enable: false
+nginx_html_upload_src: www/*
+nginx_html_upload_dest: /usr/share/nginx/html
+# Upload SSL certificates and keys.
+nginx_ssl_upload_enable: false
+nginx_ssl_crt_upload_src: ssl/*.crt
+nginx_ssl_crt_upload_dest: /etc/ssl/certs/
+nginx_ssl_key_upload_src: ssl/*.key
+nginx_ssl_key_upload_dest: /etc/ssl/private/
+
+# Enable creating dynamic templated NGINX HTML demo websites.
+nginx_html_demo_template_enable: false
+nginx_html_demo_template:
+  default:
+    template_file: www/index.html.j2
+    html_file_name: index.html
+    html_file_location: /usr/share/nginx/html
+    web_server_name: Default
+
+# Enable creating dynamic templated NGINX configuration files.
+# Defaults are the values found in a fresh NGINX installation.
+nginx_main_template_enable: false
+nginx_main_template:
+  template_file: nginx.conf.j2
+  conf_file_name: nginx.conf
+  conf_file_location: /etc/nginx/
+  user: nginx
+  worker_processes: auto
+  error_level: warn
+  worker_connections: 1024
+  http_enable: true
+  http_settings:
+    keepalive_timeout: 65
+    cache: false
+    rate_limit: false
+    keyval: false
+  stream_enable: false
+  http_global_autoindex: false
+  #auth_request_http: /auth
+
+# Enable creating dynamic templated NGINX HTTP configuration files.
+# Defaults will not produce a valid configuration. Instead they are meant to showcase
+# the options available for templating. Each key represents a new configuration file.
+nginx_http_template_enable: false
+nginx_http_template:
+  default:
+    template_file: http/default.conf.j2
+    conf_file_name: default.conf
+    conf_file_location: /etc/nginx/conf.d/
+    port: 8081
+    server_name: localhost
+    error_page: /usr/share/nginx/html
+    root: /usr/share/nginx/html
+    https_redirect: false
+    autoindex: false
+    auth_basic: null
+    auth_basic_user_file: null
+    try_files: $uri $uri/index.html $uri.html =404
+    #auth_request: /auth
+    ssl:
+      cert: /etc/ssl/certs/default.crt
+      key: /etc/ssl/private/default.key
+      dhparam: /etc/ssl/private/dh_param.pem
+      protocols: TLSv1 TLSv1.1 TLSv1.2
+      ciphers: HIGH:!aNULL:!MD5
+      session_cache: none
+      session_timeout: 5m
+    web_server:
+      locations:
+        default:
+          location: /
+          html_file_location: /usr/share/nginx/html
+          html_file_name: index.html
+          autoindex: false
+          auth_basic: null
+          auth_basic_user_file: null
+          try_files: $uri $uri/index.html $uri.html =404
+          #auth_request: /auth
+          #returns:
+            #return302:
+              #code: 302
+              #url: https://sso.somehost.local/?url=https://$http_host$request_uri
+      http_demo_conf: false
+    reverse_proxy:
+      proxy_cache_path:
+        - path: /var/cache/nginx/proxy/backend
+          keys_zone:
+            name: backend_proxy_cache
+            size: 10m
+          levels: "1:2"
+          max_size: 10g
+          inactive: 60m
+          use_temp_path: true
+      proxy_temp_path:
+        path: /var/cache/nginx/proxy/temp
+      proxy_cache_lock: true
+      proxy_cache_min_uses: 5
+      proxy_cache_revalidate: true
+      proxy_cache_use_stale:
+        - error
+        - timeout
+      proxy_ignore_headers:
+        - Expires
+      locations:
+        backend:
+          location: /
+          proxy_connect_timeout: null
+          proxy_pass: http://backend
+          #proxy_pass_request_body: off
+          proxy_set_header:
+            header_host:
+              name: Host
+              value: $host
+            header_x_real_ip:
+              name: X-Real-IP
+              value: $remote_addr
+            header_x_forwarded_for:
+              name: X-Forwarded-For
+              value: $proxy_add_x_forwarded_for
+            header_x_forwarded_proto:
+              name: X-Forwarded-Proto
+              value: $scheme
+            #header_upgrade:
+              #name: Upgrade
+              #value: $http_upgrade
+            #header_connection:
+              #name: Connection
+              #value: "Upgrade"
+            #header_random:
+              #name: RandomName
+              #value: RandomValue
+          #internal: false
+          #proxy_store: off
+          #proxy_store_acccess: user:rw
+          proxy_read_timeout: null
+          proxy_ssl:
+            cert: /etc/ssl/certs/proxy_default.crt
+            key: /etc/ssl/private/proxy_default.key
+            trusted_cert: /etc/ssl/certs/proxy_ca.crt
+            protocols: TLSv1 TLSv1.1 TLSv1.2
+            ciphers: HIGH:!aNULL:!MD5
+            verify: false
+            verify_depth: 1
+            session_reuse: true
+          proxy_cache: frontend_proxy_cache
+          proxy_temp_path:
+            path: /var/cache/nginx/proxy/backend/temp
+          proxy_cache_lock: false
+          proxy_cache_min_uses: 3
+          proxy_cache_revalidate: false
+          proxy_cache_use_stale:
+            - http_403
+            - http_404
+          proxy_ignore_headers:
+            - Vary
+            - Cache-Control
+          websocket: false
+          auth_basic: null
+          auth_basic_user_file: null
+          try_files: $uri $uri/index.html $uri.html =404
+          #auth_req: /auth
+          #returns:
+            #return302:
+              #code: 302
+              #url: https://sso.somehost.local/?url=https://$http_host$request_uri
+      health_check_plus: false
+    proxy_cache:
+      proxy_cache_path:
+        path: /var/cache/nginx
+        keys_zone:
+          name: one
+          size: 10m
+      proxy_temp_path:
+        path: /var/cache/nginx/proxy
+    upstreams:
+      upstream1:
+        name: backend
+        lb_method: least_conn
+        zone_name: backend_mem_zone
+        zone_size: 64k
+        sticky_cookie: false
+        servers:
+          server1:
+            address: localhost
+            port: 8081
+            weight: 1
+            health_check: max_fails=1 fail_timeout=10s
+
+# Enable NGINX status data.
+# Will enable 'stub_status' in NGINX Open Source and 'status' in NGINX Plus.
+# Default is false.
+nginx_status_enable: false
+nginx_status_port: 8080
+
+# Enable NGINX Plus REST API, write access to the REST API, and NGINX Plus dashboard.
+# Requires NGINX Plus.
+# Default is false.
+nginx_rest_api_enable: false
+nginx_rest_api_src: http/api.conf.j2
+nginx_rest_api_location: /etc/nginx/conf.d/api.conf
+nginx_rest_api_port: 8080
+nginx_rest_api_write: false
+nginx_rest_api_dashboard: false
+
+# Enable creating dynamic templated NGINX stream configuration files.
+# Defaults will not produce a valid configuration. Instead they are meant to showcase
+# the options available for templating. Each key represents a new configuration file.
+nginx_stream_template_enable: false
+nginx_stream_template:
+  default:
+    template_file: stream/default.conf.j2
+    conf_file_name: default.conf
+    conf_file_location: /etc/nginx/conf.d/stream/
+    network_streams:
+      default:
+        listen_address: localhost
+        listen_port: 80
+        udp_enable: false
+        proxy_pass: backend
+        proxy_timeout: 3s
+        proxy_connect_timeout: 1s
+        proxy_protocol: false
+        proxy_ssl:
+          cert: /etc/ssl/certs/proxy_default.crt
+          key: /etc/ssl/private/proxy_default.key
+          trusted_cert: /etc/ssl/certs/proxy_ca.crt
+          protocols: TLSv1 TLSv1.1 TLSv1.2
+          ciphers: HIGH:!aNULL:!MD5
+          verify: false
+          verify_depth: 1
+          session_reuse: true
+        health_check_plus: false
+    upstreams:
+      upstream1:
+        name: backend
+        lb_method: least_conn
+        zone_name: backend
+        zone_size: 64k
+        sticky_cookie: false
+        servers:
+          server1:
+            address: localhost
+            port: 8080
+            weight: 1
+            health_check: max_fails=1 fail_timeout=10s
+```
+
+Dependencies
+------------
+
+None
+
+Example Playbook
+----------------
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost and installing the open source version of NGINX.
+
+```yaml
+---
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+```
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role to a dynamic inventory containing the `nginx` tag.
+
+```yaml
+---
+- hosts: tag_nginx
+  remote_user: root
+  roles:
+    - role: nginxinc.nginx
+```
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost and installing the open source version of NGINX as a simple web server.
+
+```yaml
+---
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+  vars:
+    nginx_http_template_enable: true
+    nginx_http_template:
+      default:
+        template_file: http/default.conf.j2
+        conf_file_name: default.conf
+        conf_file_location: /etc/nginx/conf.d/
+        port: 80
+        server_name: localhost
+        error_page: /usr/share/nginx/html
+        autoindex: false
+        web_server:
+          locations:
+            default:
+              location: /
+              html_file_location: /usr/share/nginx/html
+              html_file_name: index.html
+              autoindex: false
+          http_demo_conf: false
+```
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost and installing the open source version of NGINX as a reverse proxy.
+
+```yaml
+---
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+  vars:
+    nginx_http_template_enable: true
+    nginx_http_template:
+      default:
+        template_file: http/default.conf.j2
+        conf_file_name: default.conf
+        conf_file_location: /etc/nginx/conf.d/
+        port: 80
+        server_name: localhost
+        error_page: /usr/share/nginx/html
+        autoindex: false
+        reverse_proxy:
+          locations:
+            frontend:
+              location: /
+              proxy_pass: http://frontend_servers
+            backend:
+              location: /backend
+              proxy_pass: http://backend_servers
+        upstreams:
+          upstream_1:
+            name: frontend_servers
+            lb_method: least_conn
+            zone_name: frontend
+            zone_size: 64k
+            sticky_cookie: false
+            servers:
+              frontend_server_1:
+                address: localhost
+                port: 80
+                weight: 1
+                health_check: max_fails=3 fail_timeout=5s
+          upstream_2:
+            name: backend_servers
+            lb_method: least_conn
+            zone_name: backend
+            zone_size: 64k
+            sticky_cookie: false
+            servers:
+              backend_server_1:
+                address: localhost
+                port: 8080
+                weight: 1
+                health_check: max_fails=3 fail_timeout=5s
+```
+
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost and installing NGINX Plus.
+
+```yaml
+---
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+  vars:
+    nginx_type: plus
+```
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost to install NGINX Plus and the NGINX Controller agent.
+
+```yaml
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+  vars:
+    nginx_type: plus
+    nginx_rest_api_enable: true
+    nginx_rest_api_write: true
+    nginx_controller_enable: true
+    nginx_controller_api_key: <API_KEY_HERE>
+    nginx_controller_api_endpoint: https://<FQDN>/1.4
+```
+
+This is a sample playbook file for deploying the Ansible Galaxy NGINX role in a localhost to install NGINX Unit and the PHP/Perl NGINX Unit language modules.
+
+```yaml
+---
+- hosts: localhost
+  become: true
+  roles:
+    - role: nginxinc.nginx
+  vars:
+    nginx_enable: false
+    nginx_unit_enable: true
+    nginx_unit_modules:
+      - unit-php
+      - unit-perl
+```
+
+To run any of the above sample playbooks create a `setup-nginx.yml` file and paste the contents. Executing the Ansible Playbook is then as simple as executing `ansible-playbook setup-nginx.yml`.
+
+Alternatively, you can also clone this repository instead of installing it from Ansible Galaxy. If you decide to do so, replace the role variable in the previous sample playbooks from `nginxinc.nginx` to `ansible-role-nginx`.
+
+License
+-------
+
+[Apache License, Version 2.0](https://github.com/nginxinc/ansible-role-nginx/blob/master/LICENSE)
+
+Author Information
+------------------
+
+[Alessandro Fael Garcia](https://github.com/alessfg)
+
+[Grzegorz Dzien](https://github.com/gdzien)
+
+&copy; [NGINX, Inc.](https://www.nginx.com/) 2018 - 2019
