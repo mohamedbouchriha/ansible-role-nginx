@@ -42,7 +42,7 @@ nginx_repository:
   redhat: >-
       https://nginx.org/packages/{{ (nginx_branch == 'mainline')
       | ternary('mainline/', '') }}{{ (ansible_distribution == "RedHat")
-      | ternary('rhel', 'centos') }}/{{ ansible_distribution_major_version }}/$basearch/
+      | ternary('rhel', 'centos') }}/7/$basearch/
   suse: >-
       https://nginx.org/packages/{{ (nginx_branch == 'mainline')
       | ternary('mainline/', '') }}sles/{{ ansible_distribution_major_version }}
